@@ -14,6 +14,57 @@ import streamlit as st
 DATA_DIR = Path("data")
 LOCAL_DATA_PATH = DATA_DIR / "responses.jsonl"
 
+ROSTER = [
+    "晁周皓",
+    "程凯鹭",
+    "邓毅讯",
+    "何承峰",
+    "何果林",
+    "胡盛宇",
+    "贾浩林",
+    "姜震",
+    "兰文鸽",
+    "李宏",
+    "李佳睿",
+    "李炼芳",
+    "李瑞哲",
+    "李析泽",
+    "刘斌",
+    "刘聪",
+    "刘顶胜",
+    "刘麟",
+    "刘耀文",
+    "陆希朗",
+    "栾雨恒",
+    "马刚",
+    "欧子琦",
+    "潘高",
+    "邵晨轩",
+    "申佳炜",
+    "石力成",
+    "石龙",
+    "苏恒",
+    "苏培阳",
+    "汪涵",
+    "王鹤澎",
+    "王佳豪",
+    "王明浩",
+    "王鹏瑞",
+    "王艺臻",
+    "王裕杰",
+    "吴昊",
+    "许彦浩",
+    "薛凯锋",
+    "杨宁华",
+    "于相杰",
+    "余卓甫",
+    "张景程",
+    "张庭乐",
+    "张译丹",
+    "郑生祥",
+    "郑玉",
+]
+
 
 st.set_page_config(page_title="毕业去向意向收集表", page_icon="📝", layout="centered")
 
@@ -42,6 +93,14 @@ def github_headers(token: str) -> dict[str, str]:
     }
 
 
+def normalize_name(name: str) -> str:
+    return name.strip().replace(" ", "").replace("\u3000", "")
+
+
+def roster_lookup() -> set[str]:
+    return {normalize_name(name) for name in ROSTER}
+
+
 def fetch_github_file(config: dict[str, str]) -> tuple[str, str | None]:
     url = f"https://api.github.com/repos/{config['repo']}/contents/{config['data_path']}"
     response = requests.get(
@@ -56,6 +115,43 @@ def fetch_github_file(config: dict[str, str]) -> tuple[str, str | None]:
     payload = response.json()
     content = base64.b64decode(payload["content"]).decode("utf-8")
     return content, payload["sha"]
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def load_response_rows(token: str, repo: str, branch: str, data_path: str) -> list[dict[str, Any]]:
+    if token and repo:
+        content, _ = fetch_github_file(
+            {
+                "token": token,
+                "repo": repo,
+                "branch": branch,
+                "data_path": data_path,
+            }
+        )
+    elif LOCAL_DATA_PATH.exists():
+        content = LOCAL_DATA_PATH.read_text(encoding="utf-8")
+    else:
+        content = ""
+
+    rows = []
+    for line in content.splitlines():
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def get_response_rows() -> list[dict[str, Any]]:
+    config = get_github_config()
+    return load_response_rows(
+        config["token"],
+        config["repo"],
+        config["branch"],
+        config["data_path"],
+    )
 
 
 def save_to_github(record: dict[str, Any]) -> None:
@@ -84,6 +180,7 @@ def save_to_github(record: dict[str, Any]) -> None:
 
         response = requests.put(url, headers=headers, json=body, timeout=20)
         if response.status_code in (200, 201):
+            load_response_rows.clear()
             return
         if response.status_code == 409 and attempt < 2:
             time.sleep(0.7)
@@ -95,6 +192,7 @@ def save_locally(record: dict[str, Any]) -> None:
     DATA_DIR.mkdir(exist_ok=True)
     with LOCAL_DATA_PATH.open("a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False) + "\n")
+    load_response_rows.clear()
 
 
 def validate(record: dict[str, Any]) -> list[str]:
@@ -102,6 +200,8 @@ def validate(record: dict[str, Any]) -> list[str]:
 
     if not record["name"].strip():
         errors.append("请填写姓名。")
+    elif normalize_name(record["name"]) not in roster_lookup():
+        errors.append("姓名不在班级名单中，请检查是否有错别字。")
 
     if not record["student_id"].strip():
         errors.append("请填写学号。")
@@ -133,6 +233,46 @@ def validate(record: dict[str, Any]) -> list[str]:
     return errors
 
 
+def build_progress_rows(responses: list[dict[str, Any]]) -> list[dict[str, str]]:
+    submitted_by_name: dict[str, dict[str, Any]] = {}
+    for response in responses:
+        normalized = normalize_name(str(response.get("name", "")))
+        if normalized:
+            submitted_by_name[normalized] = response
+
+    progress_rows = []
+    for index, name in enumerate(ROSTER, start=1):
+        response = submitted_by_name.get(normalize_name(name))
+        progress_rows.append(
+            {
+                "序号": str(index),
+                "姓名": name,
+                "填写状态": "已填写" if response else "未填写",
+            }
+        )
+    return progress_rows
+
+
+def show_progress_overview() -> None:
+    st.subheader("填写进度一览")
+    try:
+        progress_rows = build_progress_rows(get_response_rows())
+    except Exception as exc:
+        st.warning(f"填写进度暂时无法读取：{exc}")
+        return
+
+    submitted_count = sum(1 for row in progress_rows if row["填写状态"] == "已填写")
+    total_count = len(progress_rows)
+    missing_count = total_count - submitted_count
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("总人数", total_count)
+    col2.metric("已填写", submitted_count)
+    col3.metric("未填写", missing_count)
+
+    st.dataframe(progress_rows, hide_index=True, use_container_width=True, height=420)
+
+
 def show_admin_view() -> None:
     admin_password = secret("ADMIN_PASSWORD")
     if not admin_password:
@@ -144,19 +284,23 @@ def show_admin_view() -> None:
             return
 
         st.info("正式部署后，原始数据保存在 GitHub 仓库的 data/responses.jsonl 文件中。")
-        if LOCAL_DATA_PATH.exists():
-            rows = [
-                json.loads(line)
-                for line in LOCAL_DATA_PATH.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            ]
+        try:
+            rows = get_response_rows()
+        except Exception as exc:
+            st.error(f"读取数据失败：{exc}")
+            return
+
+        if rows:
             st.dataframe(rows, use_container_width=True)
         else:
-            st.caption("本地暂无数据。")
+            st.caption("暂无数据。")
 
 
 st.title("毕业去向意向收集表")
 st.caption("请按个人实际情况填写，提交后无需重复填写。")
+
+show_progress_overview()
+st.divider()
 
 if "step" not in st.session_state:
     st.session_state.step = 1
@@ -166,7 +310,7 @@ if st.session_state.step == 1:
         name = st.text_input("姓名", placeholder="请输入姓名")
         student_id = st.text_input("学号", placeholder="请输入学号")
         can_recommend = st.radio("是否具备保研资格？", ["能保研", "不能保研"], index=None, horizontal=True)
-        next_step = st.form_submit_button("下一步")
+        next_step = st.form_submit_button("下一步", type="primary")
 
     if next_step:
         basic_record = {
@@ -177,6 +321,8 @@ if st.session_state.step == 1:
         basic_errors = []
         if not basic_record["name"]:
             basic_errors.append("请填写姓名。")
+        elif normalize_name(basic_record["name"]) not in roster_lookup():
+            basic_errors.append("姓名不在班级名单中，请检查是否有错别字。")
         if not basic_record["student_id"]:
             basic_errors.append("请填写学号。")
         if not basic_record["can_recommend"]:
@@ -247,9 +393,10 @@ if st.session_state.step == 2:
                 placeholder="例如：地勘单位、国企、考公、设计院等",
             )
 
-    submitted = st.button("提交")
+    col_submit, col_back = st.columns(2)
+    submitted = col_submit.button("提交", type="primary")
 
-    if st.button("返回修改基本信息"):
+    if col_back.button("返回修改基本信息"):
         st.session_state.step = 1
         st.rerun()
 
