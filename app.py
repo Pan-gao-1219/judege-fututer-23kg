@@ -103,6 +103,9 @@ def validate(record: dict[str, Any]) -> list[str]:
     if not record["name"].strip():
         errors.append("请填写姓名。")
 
+    if not record["can_recommend"]:
+        errors.append("请选择是否具备保研资格。")
+
     if record["can_recommend"] == "能保研":
         if not record["recommend_destination"]:
             errors.append("请选择保研去向。")
@@ -155,7 +158,7 @@ st.caption("请按个人实际情况填写，提交后无需重复填写。")
 with st.form("survey_form", clear_on_submit=False):
     name = st.text_input("姓名", placeholder="请输入姓名")
 
-    can_recommend = st.radio("是否具备保研资格？", ["能保研", "不能保研"], horizontal=True)
+    can_recommend = st.radio("是否具备保研资格？", ["能保研", "不能保研"], index=None, horizontal=True)
 
     recommend_destination = ""
     local_recommend_type = ""
@@ -167,12 +170,13 @@ with st.form("survey_form", clear_on_submit=False):
     job_intention = ""
 
     if can_recommend == "能保研":
-        recommend_destination = st.radio("保研去向", ["保研本校", "保研外校"], horizontal=True)
+        recommend_destination = st.radio("保研去向", ["保研本校", "保研外校"], index=None, horizontal=True)
 
         if recommend_destination == "保研本校":
             local_recommend_type = st.radio(
                 "保研本校类型",
                 ["工程硕博", "学硕（地质资源与地质工程）", "专硕（地质工程）"],
+                index=None,
             )
 
         if recommend_destination == "保研外校":
@@ -182,15 +186,16 @@ with st.form("survey_form", clear_on_submit=False):
             )
 
     if can_recommend == "不能保研":
-        non_recommend_plan = st.radio("不能保研后的选择", ["考研", "找工作"], horizontal=True)
+        non_recommend_plan = st.radio("不能保研后的选择", ["考研", "找工作"], index=None, horizontal=True)
 
         if non_recommend_plan == "考研":
-            postgraduate_school = st.radio("考研学校选择", ["本校", "外校"], horizontal=True)
+            postgraduate_school = st.radio("考研学校选择", ["本校", "外校"], index=None, horizontal=True)
 
             if postgraduate_school == "本校":
                 local_postgraduate_major = st.radio(
                     "考研本校方向",
                     ["地质资源与地质工程", "地质工程"],
+                    index=None,
                 )
 
             if postgraduate_school == "外校":
