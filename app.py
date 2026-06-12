@@ -103,6 +103,9 @@ def validate(record: dict[str, Any]) -> list[str]:
     if not record["name"].strip():
         errors.append("请填写姓名。")
 
+    if not record["student_id"].strip():
+        errors.append("请填写学号。")
+
     if not record["can_recommend"]:
         errors.append("请选择是否具备保研资格。")
 
@@ -155,10 +158,44 @@ def show_admin_view() -> None:
 st.title("毕业去向意向收集表")
 st.caption("请按个人实际情况填写，提交后无需重复填写。")
 
-with st.form("survey_form", clear_on_submit=False):
-    name = st.text_input("姓名", placeholder="请输入姓名")
+if "step" not in st.session_state:
+    st.session_state.step = 1
 
-    can_recommend = st.radio("是否具备保研资格？", ["能保研", "不能保研"], index=None, horizontal=True)
+if st.session_state.step == 1:
+    with st.form("basic_form", clear_on_submit=False):
+        name = st.text_input("姓名", placeholder="请输入姓名")
+        student_id = st.text_input("学号", placeholder="请输入学号")
+        can_recommend = st.radio("是否具备保研资格？", ["能保研", "不能保研"], index=None, horizontal=True)
+        next_step = st.form_submit_button("下一步")
+
+    if next_step:
+        basic_record = {
+            "name": name.strip(),
+            "student_id": student_id.strip(),
+            "can_recommend": can_recommend,
+        }
+        basic_errors = []
+        if not basic_record["name"]:
+            basic_errors.append("请填写姓名。")
+        if not basic_record["student_id"]:
+            basic_errors.append("请填写学号。")
+        if not basic_record["can_recommend"]:
+            basic_errors.append("请选择是否具备保研资格。")
+
+        if basic_errors:
+            for error in basic_errors:
+                st.error(error)
+        else:
+            st.session_state.basic_record = basic_record
+            st.session_state.step = 2
+            st.rerun()
+
+submitted = False
+record: dict[str, Any] | None = None
+
+if st.session_state.step == 2:
+    basic_record = st.session_state.basic_record
+    st.info(f"{basic_record['name']}（{basic_record['student_id']}）：{basic_record['can_recommend']}")
 
     recommend_destination = ""
     local_recommend_type = ""
@@ -169,7 +206,7 @@ with st.form("survey_form", clear_on_submit=False):
     external_postgraduate_major = ""
     job_intention = ""
 
-    if can_recommend == "能保研":
+    if basic_record["can_recommend"] == "能保研":
         recommend_destination = st.radio("保研去向", ["保研本校", "保研外校"], index=None, horizontal=True)
 
         if recommend_destination == "保研本校":
@@ -185,7 +222,7 @@ with st.form("survey_form", clear_on_submit=False):
                 placeholder="例如：地质工程、资源勘查、环境地质等",
             )
 
-    if can_recommend == "不能保研":
+    if basic_record["can_recommend"] == "不能保研":
         non_recommend_plan = st.radio("不能保研后的选择", ["考研", "找工作"], index=None, horizontal=True)
 
         if non_recommend_plan == "考研":
@@ -210,23 +247,29 @@ with st.form("survey_form", clear_on_submit=False):
                 placeholder="例如：地勘单位、国企、考公、设计院等",
             )
 
-    submitted = st.form_submit_button("提交")
+    submitted = st.button("提交")
 
-if submitted:
-    record = {
-        "submitted_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-        "name": name.strip(),
-        "can_recommend": can_recommend,
-        "recommend_destination": recommend_destination,
-        "local_recommend_type": local_recommend_type,
-        "external_recommend_major": external_recommend_major.strip(),
-        "non_recommend_plan": non_recommend_plan,
-        "postgraduate_school": postgraduate_school,
-        "local_postgraduate_major": local_postgraduate_major,
-        "external_postgraduate_major": external_postgraduate_major.strip(),
-        "job_intention": job_intention.strip(),
-    }
+    if st.button("返回修改基本信息"):
+        st.session_state.step = 1
+        st.rerun()
 
+    if submitted:
+        record = {
+            "submitted_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+            "name": basic_record["name"],
+            "student_id": basic_record["student_id"],
+            "can_recommend": basic_record["can_recommend"],
+            "recommend_destination": recommend_destination,
+            "local_recommend_type": local_recommend_type,
+            "external_recommend_major": external_recommend_major.strip(),
+            "non_recommend_plan": non_recommend_plan,
+            "postgraduate_school": postgraduate_school,
+            "local_postgraduate_major": local_postgraduate_major,
+            "external_postgraduate_major": external_postgraduate_major.strip(),
+            "job_intention": job_intention.strip(),
+        }
+
+if submitted and record:
     validation_errors = validate(record)
     if validation_errors:
         for error in validation_errors:
