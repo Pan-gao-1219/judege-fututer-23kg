@@ -214,8 +214,11 @@ def validate(record: dict[str, Any]) -> list[str]:
             errors.append("请选择保研去向。")
         if record["recommend_destination"] == "保研本校" and not record["local_recommend_type"]:
             errors.append("请选择保研本校类型。")
-        if record["recommend_destination"] == "保研外校" and not record["external_recommend_major"].strip():
-            errors.append("请填写保研外校意向方向/专业。")
+        if record["recommend_destination"] == "保研外校":
+            if not record["external_recommend_school"].strip():
+                errors.append("请填写保研外校意向学校。")
+            if not record["external_recommend_major"].strip():
+                errors.append("请填写保研外校意向方向/专业。")
 
     if record["can_recommend"] == "不能保研":
         if not record["non_recommend_plan"]:
@@ -225,8 +228,11 @@ def validate(record: dict[str, Any]) -> list[str]:
                 errors.append("请选择考研学校。")
             if record["postgraduate_school"] == "本校" and not record["local_postgraduate_major"]:
                 errors.append("请选择考研本校方向。")
-            if record["postgraduate_school"] == "外校" and not record["external_postgraduate_major"].strip():
-                errors.append("请填写考研外校具体方向/专业。")
+            if record["postgraduate_school"] == "外校":
+                if not record["external_postgraduate_school"].strip():
+                    errors.append("请填写考研外校意向学校。")
+                if not record["external_postgraduate_major"].strip():
+                    errors.append("请填写考研外校具体方向/专业。")
         if record["non_recommend_plan"] == "找工作" and not record["job_intention"].strip():
             errors.append("请填写就业意向。")
 
@@ -345,10 +351,12 @@ if st.session_state.step == 2:
 
     recommend_destination = ""
     local_recommend_type = ""
+    external_recommend_school = ""
     external_recommend_major = ""
     non_recommend_plan = ""
     postgraduate_school = ""
     local_postgraduate_major = ""
+    external_postgraduate_school = ""
     external_postgraduate_major = ""
     job_intention = ""
 
@@ -363,6 +371,10 @@ if st.session_state.step == 2:
             )
 
         if recommend_destination == "保研外校":
+            external_recommend_school = st.text_input(
+                "保研外校意向学校",
+                placeholder="请输入意向学校",
+            )
             external_recommend_major = st.text_input(
                 "保研外校意向方向/专业",
                 placeholder="例如：地质工程、资源勘查、环境地质等",
@@ -382,6 +394,10 @@ if st.session_state.step == 2:
                 )
 
             if postgraduate_school == "外校":
+                external_postgraduate_school = st.text_input(
+                    "考研外校意向学校",
+                    placeholder="请输入意向学校",
+                )
                 external_postgraduate_major = st.text_input(
                     "考研外校具体方向/专业",
                     placeholder="请输入具体方向/专业",
@@ -408,10 +424,12 @@ if st.session_state.step == 2:
             "can_recommend": basic_record["can_recommend"],
             "recommend_destination": recommend_destination,
             "local_recommend_type": local_recommend_type,
+            "external_recommend_school": external_recommend_school.strip(),
             "external_recommend_major": external_recommend_major.strip(),
             "non_recommend_plan": non_recommend_plan,
             "postgraduate_school": postgraduate_school,
             "local_postgraduate_major": local_postgraduate_major,
+            "external_postgraduate_school": external_postgraduate_school.strip(),
             "external_postgraduate_major": external_postgraduate_major.strip(),
             "job_intention": job_intention.strip(),
         }
